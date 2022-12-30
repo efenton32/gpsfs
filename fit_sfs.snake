@@ -1,0 +1,140 @@
+import numpy as np
+from twosfs.spectra import Spectra, add_spectra, spectra_from_TreeSequence, load_spectra
+import sklearn.gaussian_process as gp
+from scipy.stats import norm
+import csv
+from sim_demography import sim_demography, param_sim
+from stat_tools import compare_spectra, dict_to_list, batched_prediction, list_to_dict
+import json
+from itertools import product
+
+data_path = "/n/desai_lab/users/efenton/2sfs/twosfs/agl_data/"
+
+num_sims = 100
+samp_size = 63
+# 3 demes
+(a_min, a_max, a_space) = (1.01, 1.20, 0.01)
+(mig_min, mig_max, mig_space) = (1e-3, 5e-3, 2e-4)
+alpha_vals = np.arange(a_min, a_max, a_space)
+mig_rates = np.arange(mig_min, mig_max, mig_space)
+
+samps_grid = [(a, b, samp_size-a-b)
+              for a in range(int(np.ceil(samp_size/3)), 40)
+              for b in range(int(np.ceil((samp_size-a)/2)), min(a+1, samp_size - a))]
+
+generate_mig_rates = product(mig_rates, mig_rates, mig_rates)
+param_grid = product(alpha_vals, samps_grid, generate_mig_rates)
+
+# 2 demes
+"""
+demes = 2
+(a_min, a_max, a_space) = (1.01, 1.20, 0.01)
+(off_min, off_max, off_space) = (0, 10, 1)
+(mig_min, mig_max, mig_space) = (1e-3, 5e-3, 2e-4)
+
+
+alpha_vals = np.arange(a_min, a_max, a_space)
+offset_vals = np.arange(off_min, off_max, off_space)
+mig_rates = np.arange(mig_min, mig_max, mig_space)
+"""
+
+def previous_batch(wildcards):
+    prev_batch = str( int(wildcards.batch) - 1)
+    return "sims/{}/results_{}.jsonl".format(wildcards.chr, prev_batch)
+
+ruleorder: initial_samps > generate_samps
+rule initial_samps:
+    output:
+        "sims/{chr}/results_0.jsonl"
+    resources:
+        mem=1000,
+        time=5,
+    run:
+        alpha_samps = alpha_vals[np.random.randint(0, len(alpha_vals), num_sims)]
+        pop_samps = [samps_grid[np.random.randint(0, len(samps_grid))] for i in range(num_sims)]
+        mig_samps = [mig_rates[np.random.randint(0, len(mig_rates), 3)] for i in range(num_sims)]
+
+        with open(output[0], "w") as outfile:
+            for a, p, r in zip(alpha_samps, pop_samps, mig_samps):
+                params_dict = {"alpha": float(a), "samples": list(p), "mig_rates": list(r)}
+                json.dump(params_dict, outfile)
+                outfile.write("\n")
+
+rule generate_samps:
+    input:
+        sims = expand(
+            "sims/{chr}/spec_batch_{batch}_rep_{rep}.hdf5",
+            rep=range(num_sims),
+            allow_missing=True,
+        ),
+        results_file = previous_batch,
+        data_file = "../2sfs/twosfs/agl_data/{chr}/cod_{chr}_initial_spectra.hdf5",
+    output:
+        "sims/{chr}/results_{batch}.jsonl"
+    resources:
+        mem=20000,
+        time=45,
+    run:
+        with open(input.results_file) as rf:
+            params_dict = [json.loads(line) for line in rf]
+
+        spec_data = load_spectra(str(input.data_file))
+        for i, sim in enumerate(input.sims):
+            params_dict[i+(int(wildcards.batch)-1)*num_sims]["ks"] = compare_spectra(spec_data, load_spectra(sim))
+
+        ks = np.array([p["ks"] for p in params_dict])
+        param_list = np.array([dict_to_list(p) for p in params_dict])[:,:-1]
+        n_features = param_list.shape[1]
+
+        k = np.ones(n_features)
+        kernel = gp.kernels.RBF(k, (1e-4, 50))
+        model = gp.GaussianProcessRegressor(kernel=kernel,
+                                            n_restarts_optimizer=10,
+                                            alpha=0.01,
+                                            normalize_y=True,
+                                            copy_X_train=False)
+
+        model.fit(param_list, ks)
+
+        params_predict = []
+        for p in param_grid:
+            params_predict.append([])
+            for x in p:
+                try:
+                    for y in x:
+                        params_predict[-1].append(y)
+                except TypeError:
+                    params_predict[-1].append(x)
+
+        ks_pred, std = batched_prediction(model, params_predict, int(3e5))
+        idx = np.argmin(ks_pred)
+        params_min = params_predict[idx]
+        ks_min = ks_pred[idx]
+        p_imp_rand = norm.cdf(ks_pred - ks_min, std) - (4/(int(wildcards.batch)+1))*np.random.random(len(ks_pred))
+        idxs = np.argsort(p_imp_rand)[:num_sims]
+        next_pts = [params_predict[i] for i in idxs]
+        for pt in next_pts:
+            params_dict.append(list_to_dict(pt, ["alpha", "samples", "mig_rates"], [1, 3, 3]))
+
+        with open(output[0], "w") as outfile:
+            for p in params_dict:
+                json.dump(p, outfile)
+                outfile.write("\n")
+
+rule run_sims:
+    output:
+        "sims/{chr}/spec_batch_{batch}_rep_{rep}.hdf5"
+    input:
+        previous_batch
+    resources:
+        mem=3000,
+        time=10,
+    run:
+        with open(input[0], "r") as infile:
+            for i in range((int(wildcards.batch)-1)*num_sims):
+                next(infile)
+            for i in range(int(wildcards.rep)):
+                next(infile)
+            param_dict = json.loads(next(infile))
+        sim_demography(output[0], **param_dict)
+
