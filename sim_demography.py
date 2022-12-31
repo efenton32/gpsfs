@@ -74,7 +74,7 @@ def sim_admixture(save_file, alpha=2.0, time=0, ratio=[64,63], mig_rates=[0.01],
     spec.save(save_file)
 
 
-def sim_param_change(save_file, alpha=2.0, time=1.0, samples=[32, 31], mig_rates=[0.01],
+def sim_param_change(save_file, alpha=2.0, time=1.0, samples=[32, 31], anc_rates=[0.01],
                      new_rates=[0.01], num_replicates=int(1e4)):
 
     # Define the demes and demography
@@ -85,7 +85,7 @@ def sim_param_change(save_file, alpha=2.0, time=1.0, samples=[32, 31], mig_rates
 
     # Define migration parameters
     pairs = combinations(["pop_"+str(i) for i in range(demes)], 2)
-    for pair, rate1, rate2 in zip(pairs, mig_rates, new_rates):
+    for pair, rate1, rate2 in zip(pairs, anc_rates, new_rates):
         demography.set_symmetric_migration_rate(pair, rate2)
         demography.add_migration_rate_change(time=time, rate=rate1, source=pair[0], dest=pair[1])
         demography.add_migration_rate_change(time=time, rate=rate1, source=pair[1], dest=pair[0])

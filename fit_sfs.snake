@@ -3,27 +3,26 @@ from twosfs.spectra import Spectra, add_spectra, spectra_from_TreeSequence, load
 import sklearn.gaussian_process as gp
 from scipy.stats import norm
 import csv
-from sim_demography import sim_demography, param_sim
+from sim_demography import sim_demography, sim_param_change
 from stat_tools import compare_spectra, dict_to_list, batched_prediction, list_to_dict
 import json
 from itertools import product
 
 data_path = "/n/desai_lab/users/efenton/2sfs/twosfs/agl_data/"
 
-num_sims = 100
+num_sims = 20
 samp_size = 63
-# 3 demes
-(a_min, a_max, a_space) = (1.01, 1.20, 0.01)
-(mig_min, mig_max, mig_space) = (1e-3, 5e-3, 2e-4)
+(a_min, a_max, a_space) = (1.01, 2.0, 0.2)
+(mig_min, mig_max, mig_space) = (1e-4, 2e-3, 3e-4)
+(time_min, time_max, time_space) = (0.5, 10.6, 1.0)
 alpha_vals = np.arange(a_min, a_max, a_space)
+t_vals = np.arange(time_min, time_max, time_space)
 mig_rates = np.arange(mig_min, mig_max, mig_space)
 
-samps_grid = [(a, b, samp_size-a-b)
-              for a in range(int(np.ceil(samp_size/3)), 40)
-              for b in range(int(np.ceil((samp_size-a)/2)), min(a+1, samp_size - a))]
 
-generate_mig_rates = product(mig_rates, mig_rates, mig_rates)
-param_grid = product(alpha_vals, samps_grid, generate_mig_rates)
+generate_anc_rates = product(mig_rates, mig_rates, mig_rates)
+generate_new_rates = product(mig_rates, mig_rates, mig_rates)
+param_grid = product(alpha_vals, generate_anc_rates, generate_new_rates, t_vals)
 
 # 2 demes
 """
@@ -51,12 +50,16 @@ rule initial_samps:
         time=5,
     run:
         alpha_samps = alpha_vals[np.random.randint(0, len(alpha_vals), num_sims)]
-        pop_samps = [samps_grid[np.random.randint(0, len(samps_grid))] for i in range(num_sims)]
-        mig_samps = [mig_rates[np.random.randint(0, len(mig_rates), 3)] for i in range(num_sims)]
+        anc_mig_samps = [mig_rates[np.random.randint(0, len(mig_rates), 3)] for i in range(num_sims)]
+        new_mig_samps = [mig_rates[np.random.randint(0, len(mig_rates), 3)] for i in range(num_sims)]
+        time_samps = t_vals[np.random.randint(0, len(t_vals), num_sims)]
 
         with open(output[0], "w") as outfile:
-            for a, p, r in zip(alpha_samps, pop_samps, mig_samps):
-                params_dict = {"alpha": float(a), "samples": list(p), "mig_rates": list(r)}
+            for a, ar, nr, t in zip(alpha_samps, anc_mig_samps, new_mig_samps, time_samps):
+                params_dict = {"alpha": float(a),
+                               "anc_rates": list(ar),
+                               "new_rates": list(nr),
+                               "time": t}
                 json.dump(params_dict, outfile)
                 outfile.write("\n")
 
@@ -114,7 +117,7 @@ rule generate_samps:
         idxs = np.argsort(p_imp_rand)[:num_sims]
         next_pts = [params_predict[i] for i in idxs]
         for pt in next_pts:
-            params_dict.append(list_to_dict(pt, ["alpha", "samples", "mig_rates"], [1, 3, 3]))
+            params_dict.append(list_to_dict(pt, ["alpha", "anc_rates", "new_rates", "time"], [1, 3, 3, 1]))
 
         with open(output[0], "w") as outfile:
             for p in params_dict:
@@ -128,7 +131,7 @@ rule run_sims:
         previous_batch
     resources:
         mem=3000,
-        time=10,
+        time=20,
     run:
         with open(input[0], "r") as infile:
             for i in range((int(wildcards.batch)-1)*num_sims):
@@ -136,5 +139,5 @@ rule run_sims:
             for i in range(int(wildcards.rep)):
                 next(infile)
             param_dict = json.loads(next(infile))
-        sim_demography(output[0], **param_dict)
+        sim_param_change(output[0], samples=[36,22,5], num_replicates=int(1e5), **param_dict)
 
