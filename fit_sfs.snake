@@ -10,14 +10,17 @@ from itertools import product
 
 data_path = "/n/desai_lab/users/efenton/2sfs/twosfs/agl_data/"
 
-num_sims = 20
+num_sims = 5
 samp_size = 63
-(a_min, a_max, a_space) = (1.01, 2.0, 0.2)
-(mig_min, mig_max, mig_space) = (1e-4, 2e-3, 3e-4)
-(time_min, time_max, time_space) = (0.5, 10.6, 1.0)
+(a_min, a_max, a_space) = (1.2, 1.81, 0.1)
+(mig_min, mig_max, mig_space) = (1e-4, 6e-3, 5e-4)
+(time_min, time_max, time_space) = (5.5, 20.6, 1.0)
 alpha_vals = np.arange(a_min, a_max, a_space)
 t_vals = np.arange(time_min, time_max, time_space)
 mig_rates = np.arange(mig_min, mig_max, mig_space)
+
+mig_rates = np.array([1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 4e-3, 8e-3])
+t_vals = np.array([1, 2, 4, 8, 10, 20, 40, 80, 100]).astype("float")
 
 
 generate_anc_rates = product(mig_rates, mig_rates, mig_rates)
@@ -75,7 +78,7 @@ rule generate_samps:
     output:
         "sims/{chr}/results_{batch}.jsonl"
     resources:
-        mem=20000,
+        mem=50000,
         time=45,
     run:
         with open(input.results_file) as rf:

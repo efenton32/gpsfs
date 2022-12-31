@@ -27,9 +27,9 @@ def list_to_dict(param_list, keys, lengths):
     param_dict = {}
     for k, l in zip(keys, lengths):
         if l == 1:
-            param_dict[k] = param_list[x]
+            param_dict[k] = round(param_list[x], 6)
         else:
-            param_dict[k] = param_list[x:x+l]
+            param_dict[k] = [round(p, 6) for p in param_list[x:x+l]]
         x += l
     return param_dict
 

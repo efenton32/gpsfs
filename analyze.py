@@ -8,7 +8,7 @@ save_path = "/n/home12/efenton/for_windows/gpsfs/"
 load_path = "sims/NC_044049/"
 sim_file = "spec_batch_{}_rep_{}.hdf5"
 data_file = "../2sfs/twosfs/agl_data/NC_044049/cod_NC_044049_initial_spectra.hdf5"
-num_sims = 20
+num_sims = 5
 
 if sys.argv[1] == "idx":
     idx = int(sys.argv[2])
@@ -27,6 +27,7 @@ else:
 batch = idx // num_sims + 1
 rep = idx % num_sims
 
+print("idx: " + str(idx))
 print("batch " + str(batch) + ", rep " + str(rep))
 
 spec_sim = load_spectra(load_path + sim_file.format(batch, rep))
