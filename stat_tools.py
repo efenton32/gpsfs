@@ -5,11 +5,17 @@ def ks_distance(v1, v2):
     cdf2 = np.cumsum(v2/np.sum(v2, axis=0, keepdims=True), axis=0)
     return np.max(np.abs(cdf1 - cdf2), axis=0)
 
-def compare_spectra(spec1, spec2):
-    weighting = np.arange(len(spec1.normalized_onesfs(folded=True))) + 1
-    v1 = spec1.normalized_onesfs(folded=True) * weighting
-    v2 = spec2.normalized_onesfs(folded=True) * weighting
-    return ks_distance(v1, v2)
+def summed_ratio(v1, v2):
+    return np.max([v1/v2, v2/v1], axis = 0)
+
+def compare_spectra(spec1, spec2, method = "ks"):
+    if method == "ks":
+        weighting = np.arange(len(spec1.normalized_onesfs(folded=True))) + 1
+        v1 = spec1.normalized_onesfs(folded=True) * weighting
+        v2 = spec2.normalized_onesfs(folded=True) * weighting
+        return ks_distance(v1, v2)
+    elif method == "summed_ratio":
+        return summed_ratio(v1, v2)
 
 def dict_to_list(param_dict):
     params = []
