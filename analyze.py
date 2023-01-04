@@ -4,10 +4,12 @@ from twosfs.spectra import Spectra, load_spectra
 import json
 import sys
 
+chrom = "NC_044049"
+
 save_path = "/n/home12/efenton/for_windows/gpsfs/"
-load_path = "sims/NC_044049/"
+load_path = "sims/{}/".format(chrom)
 sim_file = "spec_batch_{}_rep_{}.hdf5"
-data_file = "../2sfs/twosfs/agl_data/NC_044049/cod_NC_044049_initial_spectra.hdf5"
+data_file = "../2sfs/twosfs/agl_data/{}/cod_{}_initial_spectra.hdf5".format(chrom, chrom)
 num_sims = 5
 
 if sys.argv[1] == "idx":
@@ -23,6 +25,7 @@ elif sys.argv[1] == "batch":
     idx = np.argmin(ks)
 else:
     raise ValueError("Must be either an idx or batch")
+
 
 batch = idx // num_sims + 1
 rep = idx % num_sims
