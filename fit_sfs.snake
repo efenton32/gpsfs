@@ -12,20 +12,34 @@ data_path = "/n/desai_lab/users/efenton/2sfs/twosfs/agl_data/"
 
 num_sims = 5
 samp_size = 63
+
 (a_min, a_max, a_space) = (1.2, 1.81, 0.1)
 (mig_min, mig_max, mig_space) = (1e-4, 6e-3, 5e-4)
 (time_min, time_max, time_space) = (5.5, 20.6, 1.0)
 alpha_vals = np.arange(a_min, a_max, a_space)
-t_vals = np.arange(time_min, time_max, time_space)
 mig_rates = np.arange(mig_min, mig_max, mig_space)
 
 mig_rates = np.array([1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 4e-3, 8e-3])
-t_vals = np.array([1, 2, 4, 8, 10, 20, 40, 80, 100]).astype("float")
-
-
+mig_times = np.array([10, 20, 40, 60, 80, 100, 120]).astype("float")
+contr_times = np.array([1, 2, 4, 8, 10, 20, 40, 80, 100]).astype("float")
+contr_fact = np.array([1, 2, 5, 10, 20, 50, 100, 200])
 generate_anc_rates = product(mig_rates, mig_rates, mig_rates)
 generate_new_rates = product(mig_rates, mig_rates, mig_rates)
-param_grid = product(alpha_vals, generate_anc_rates, generate_new_rates, t_vals)
+
+"""
+(a_min, a_max, a_space) = (1.2, 1.81, 0.1)
+alpha_vals = np.arange(a_min, a_max, a_space)
+t_vals = np.array([60, 70, 80, 90, 100, 110, 120, 130, 140]).astype("float")
+m1 = np.array([3e-5, 6e-5, 1e-4, 1.3e-4, 1.6e-4, 2e-4, 2.3e-4])
+m2 = np.array([3e-4, 4e-4, 5e-4, 6e-4, 7e-4, 8e-4])
+m3 = np.array([1e-4, 2e-4, 5e-4, 1e-3, 2e-3])
+m4 = np.array([1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 4e-3, 8e-3, 1.5e-2, 3e-2])
+
+generate_anc_rates = product(m1, m2, m4)
+generate_new_rates = product(m4, m3, m3)
+"""
+
+param_grid = product(alpha_vals, generate_anc_rates, generate_new_rates, mig_times, contr_fact, contr_times)
 
 # 2 demes
 """
@@ -55,14 +69,19 @@ rule initial_samps:
         alpha_samps = alpha_vals[np.random.randint(0, len(alpha_vals), num_sims)]
         anc_mig_samps = [mig_rates[np.random.randint(0, len(mig_rates), 3)] for i in range(num_sims)]
         new_mig_samps = [mig_rates[np.random.randint(0, len(mig_rates), 3)] for i in range(num_sims)]
-        time_samps = t_vals[np.random.randint(0, len(t_vals), num_sims)]
+        m_time_samps = mig_times[np.random.randint(0, len(t_vals), num_sims)]
+        contr_samps = contr_fact[np.random.randint(0, len(t_vals), num_sims)]
+        c_time_samps = contr_times[np.random.randint(0, len(t_vals), num_sims)]
 
         with open(output[0], "w") as outfile:
-            for a, ar, nr, t in zip(alpha_samps, anc_mig_samps, new_mig_samps, time_samps):
+            for a, ar, nr, mt, ct, cf in zip(alpha_samps, anc_mig_samps, new_mig_samps, m_time_samps,
+                                             contr_samps, c_time_samps):
                 params_dict = {"alpha": float(a),
                                "anc_rates": list(ar),
                                "new_rates": list(nr),
-                               "time": t}
+                               "mig_time": mt
+                               "contr_time": ct
+                               "contr_factor": cf}
                 json.dump(params_dict, outfile)
                 outfile.write("\n")
 
@@ -86,7 +105,8 @@ rule generate_samps:
 
         spec_data = load_spectra(str(input.data_file))
         for i, sim in enumerate(input.sims):
-            params_dict[i+(int(wildcards.batch)-1)*num_sims]["ks"] = compare_spectra(spec_data, load_spectra(sim))
+            params_dict[i+(int(wildcards.batch)-1)*num_sims]["ks"] = compare_spectra(spec_data, load_spectra(sim),
+                                                                                     method = "summed_ratio")
 
         ks = np.array([p["ks"] for p in params_dict])
         param_list = np.array([dict_to_list(p) for p in params_dict])[:,:-1]
@@ -142,5 +162,5 @@ rule run_sims:
             for i in range(int(wildcards.rep)):
                 next(infile)
             param_dict = json.loads(next(infile))
-        sim_param_change(output[0], samples=[36,22,5], num_replicates=int(1e5), **param_dict)
+        sim_param_change(output[0], samples=[28,22,13], num_replicates=int(1e5), **param_dict)
 

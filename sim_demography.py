@@ -74,21 +74,24 @@ def sim_admixture(save_file, alpha=2.0, time=0, ratio=[64,63], mig_rates=[0.01],
     spec.save(save_file)
 
 
-def sim_param_change(save_file, alpha=2.0, time=1.0, samples=[32, 31], anc_rates=[0.01],
-                     new_rates=[0.01], num_replicates=int(1e4)):
+def sim_param_change(save_file, alpha=2.0, samples=[32, 31], anc_rates=[0.01], contr_time = 1.0,
+                     contr_factor = 1.0, new_rates=[0.01], mig_time = 1.0, num_replicates=int(1e4)):
 
     # Define the demes and demography
     demes = len(samples)
     demography = msprime.Demography()
     for i in range(demes):
         demography.add_population(name="pop_"+str(i), initial_size=100)
+        demography.add_population_parameters_change(time=contr_time,
+                initial_size=contr_factor*100, population="pop_"+str(i)
+        )
+
 
     # Define migration parameters
     pairs = combinations(["pop_"+str(i) for i in range(demes)], 2)
     for pair, rate1, rate2 in zip(pairs, anc_rates, new_rates):
         demography.set_symmetric_migration_rate(pair, rate2)
-        demography.add_migration_rate_change(time=time, rate=rate1, source=pair[0], dest=pair[1])
-        demography.add_migration_rate_change(time=time, rate=rate1, source=pair[1], dest=pair[0])
+        demography.add_symmetric_migration_rate_change(time=mig_time, populations=pair, rate=rate1)
 
     # Define the coalescent model
     if alpha == 2.0:
