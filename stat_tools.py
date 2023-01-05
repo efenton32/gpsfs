@@ -19,6 +19,26 @@ def compare_spectra(spec1, spec2, method = "ks"):
         v2 = spec2.normalized_onesfs(folded=True)[1:64]
         return summed_ratio(v1, v2)
 
+def find_global_max(f, bounds, dx, n_restarts=10, n_steps = 100, decimation = 1000):
+    bounds_range = np.diff(bounds, axis = 1)
+    n_params = bounds.shape[0]
+    best_pt = np.zeros(n_params)
+    best_val = -10
+    for restart in range(n_restarts):
+        curr_pt = np.random.random(n_params)*bounds_range + bounds[:,0]
+        curr_val = f(curr_pt)
+        for step in range(n_steps):
+            slope = np.zeros(n_params)
+            for p in range(n_params):
+                test_pt = curr_pt + bounds_range[i] / decimation
+                test_val = f(test_pt)
+                slope[i] = (test_val - test_pt) / (bounds_range[i] / decimation)
+            curr_pt = curr_pt + slope * dx
+            curr_val = f(curr_pt)
+        if curr_val > best_val:
+            best_pt = curr_pt
+            best_val = curr_val
+
 def dict_to_list(param_dict):
     params = []
     for x in param_dict.values():
